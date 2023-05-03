@@ -8,22 +8,26 @@ using std::endl;
 using std::string;
 using std::vector;
 
-// Удаляем из переданной строки точки, кроме первой
-void removeDots(string &readjust) {
-    const char DOT = 46;
+void removeSymbolsFromString(string &readjust, char const SYMBOL) {
     int count = 0;
 
-    if (readjust[readjust.length() - 1] == '.') {
+    if (readjust[readjust.length() - 1] == SYMBOL) {
         readjust.erase(std::prev(readjust.end()));
     }
 
     auto it =
-            std::remove_if(readjust.begin(), readjust.end(), [&count](char &c) {
-                if (c == DOT) ++count;
-                return (count > 1 && c == DOT);
+            std::remove_if(readjust.begin(), readjust.end(), [&count, SYMBOL](char &c) {
+                if (c == SYMBOL) ++count;
+                return (count > 1 && c == SYMBOL);
             });
 
     readjust.erase(it, readjust.end());
+}
+
+// Удаляем из переданной строки точки, кроме первой
+void removeDots(string &readjust) {
+    const char DOT = 46;
+    removeSymbolsFromString(readjust, DOT);
 }
 
 // Получаем true если элемент `item` хоть раз встречается в диапазоне `range`
