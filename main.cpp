@@ -8,17 +8,22 @@ using std::endl;
 using std::string;
 using std::vector;
 
-void removeSymbolsFromString(string &readjust, char const SYMBOL) {
+enum class OpType { OPERATOR, OPERAND };
+vector<string> ranges = { "+-*/", "0123456789." };
+
+void removeSymbolFromString(string &readjust, char const symbol, int leave = 0) {
     int count = 0;
 
-    if (readjust[readjust.length() - 1] == SYMBOL) {
+    if (readjust[readjust.length() - 1] == symbol) {
         readjust.erase(std::prev(readjust.end()));
     }
 
-    auto it =
-            std::remove_if(readjust.begin(), readjust.end(), [&count, SYMBOL](char &c) {
-                if (c == SYMBOL) ++count;
-                return (count > 1 && c == SYMBOL);
+    auto it = std::remove_if(
+            readjust.begin(),
+            readjust.end(),
+            [&count, symbol, leave](char &c) {
+                if (c == symbol) ++count;
+                return (count > leave && c == symbol);
             });
 
     readjust.erase(it, readjust.end());
@@ -27,7 +32,7 @@ void removeSymbolsFromString(string &readjust, char const SYMBOL) {
 // Удаляем из переданной строки точки, кроме первой
 void removeDots(string &readjust) {
     const char DOT = 46;
-    removeSymbolsFromString(readjust, DOT);
+    removeSymbolFromString(readjust, DOT, 1);
 }
 
 // Получаем true если элемент `item` хоть раз встречается в диапазоне `range`
@@ -37,61 +42,58 @@ bool isIncludes(const string &range, const char &item) {
                        [&item](const char &c) { return c == item; });
 }
 
-// Получаем char-символ в обозначенном диапазоне `range`
-template<typename T>
-T getUserChar(string const &range) {
-    T input;
-
-    while (true) {
-        std::cin >> input;
-        // Если введено значение из диапазона - сбрасываем
-        if (isIncludes(range, input)) break;
-        printf("Error. (%c) not in range (%s). Try again: ", input, range.c_str());
-        // Сбрасываем коматозное состояние cin
-        std::cin.clear();
-        // Очищаем поток ввода
-        fflush(stdin);
-    }
-
-    return input;
-}
-
 // True если это число или точка
 bool isIncludesDotOrDigits(const char &letter) {
-    const std::string operators{"0123456789."};
-    return isIncludes(operators, letter);
+    return isIncludes(ranges[static_cast<int>(OpType::OPERAND)], letter);
 }
 
-void validateOperand(string &text, vector<string> &parts) {
-    string validText;
+// True если это один из операторов
+bool isIncludesOperators(const char &letter) {
+    return isIncludes(ranges[static_cast<int>(OpType::OPERATOR)], letter);
+}
+
+bool processedOperand(string &text, OpType opType) {
+    bool validState = true;
+    string processedText;
 
     for (int i = 0; i < text.length(); ++i) {
         char letter = text[i];
 
-        if (i == 0 && letter == '-') validText += letter;
+        if (opType == OpType::OPERAND) {
+            if (i == 0 && letter == '-') processedText += letter;
+            if (isIncludesDotOrDigits(letter)) processedText += letter;
+        }
 
-        if (isIncludesDotOrDigits(letter)) {
-            validText += letter;
+        if (opType == OpType::OPERATOR) {
+            if (isIncludesOperators(letter)) processedText += letter;
         }
     }
 
-    removeDots(validText);
-    parts.push_back(validText);
-}
-
-void validateOperator(string &text, vector<string> &parts) {
-    const std::string range{"+-*/"};
-    string validText;
-
-    if (isIncludes(range, text[0])) {
-        validText += text[0];
-    } else {
-        printf("Enter one of the operators: (%s): ", range.c_str());
-        char a = getUserChar<char>(range);
-        validText += a;
+    if (opType == OpType::OPERAND){
+        removeDots(processedText);
     }
 
-    parts.push_back(validText);
+    if (processedText.empty()) {
+        cout << "Operand is empty. Try again" << endl;
+        validState = false;
+    } else {
+        text = processedText;
+    }
+
+    return validState;
+}
+
+std::string getJoinRange(const std::string &range) {
+    char const TERMINATOR = '.';
+    char const JOIN = ',';
+
+    std::string joinRange;
+    for (int i = 0; i < range.size(); ++i) {
+        joinRange += range[i];
+        joinRange += (i != range.size() - 1) ? JOIN : TERMINATOR;
+    }
+
+    return joinRange;
 }
 
 double stringToDouble(string const &text) {
@@ -106,23 +108,17 @@ double stringToDouble(string const &text) {
 
 double getResult(vector<string> const &parts) {
     double result = stringToDouble(parts[0]);
-    char op;
+    double right = stringToDouble(parts[2]);
+    char operatorType = parts[1][0];
 
-    for (int i = 1; i < parts.size(); ++i) {
-        if (i % 2 == 1) {
-            op = parts[i][0];
-        } else {
-            double current = stringToDouble(parts[i]);
-            if (op == 42) {
-                result *= current;
-            } else if (op == 43) {
-                result += current;
-            } else if (op == 45) {
-                result -= current;
-            } else if (op == 47) {
-                result /= current;
-            }
-        }
+    if (operatorType == 42) {
+        result *= right;
+    } else if (operatorType == 43) {
+        result += right;
+    } else if (operatorType == 45) {
+        result -= right;
+    } else if (operatorType == 47) {
+        result /= right;
     }
 
     return result;
@@ -137,20 +133,29 @@ void printResult(vector<string> const &parts) {
 }
 
 void setUserInput(vector<string> &parts, string const &info) {
-    string buffer;
-
     cout << "Enter an expression. " << info << ": ";
 
+    string buffer;
     std::getline(std::cin, buffer);
     std::stringstream userStream(buffer);
 
     for (int i = 0; i < 3; ++i) {
         string currentTextFromStream;
         userStream >> currentTextFromStream;
-        if (i == 0 || i == 2) {
-            validateOperand(currentTextFromStream, parts);
-        } else if (i == 1) {
-            validateOperator(currentTextFromStream, parts);
+        bool validState = false;
+        while (!validState) {
+            OpType opType = (i == 0 || i == 2) ? OpType::OPERAND : OpType::OPERATOR;
+            validState = processedOperand(currentTextFromStream, opType);
+            if (validState) {
+                parts.push_back(currentTextFromStream);
+            } else {
+                printf("String does not contain %s or empty. Try again: ",
+                       getJoinRange(ranges[static_cast<int>(opType)]).c_str());
+                string temp;
+                std::getline(std::cin, temp);
+                std::stringstream userCurrentStream(temp);
+                userCurrentStream >> currentTextFromStream;
+            }
         }
     }
 }
@@ -162,7 +167,6 @@ int main() {
     setUserInput(parts, INFO);
 
     if (parts.size() == 3) {
-        cout << parts[2] << endl;
         printResult(parts);
     } else {
         cout << "Invalid input format. " << INFO << ".Try again!" << endl;
